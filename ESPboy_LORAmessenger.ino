@@ -355,7 +355,7 @@ keybModule.begin();
   lora.SetAirDataRate(ADR_2400);   // change the air data rate
   lora.SetAddressH(2);   // set the high address byte
   lora.SetAddressL(2);   // set the low address byte
-  lora.SetChannel(17);     // set the channel (0-32 is pretty typical)
+  lora.SetChannel(7);     // set the channel (0-32 is pretty typical)
   lora.SetUARTBaudRate(UDR_9600);
   lora.SetTransmitPower(OPT_TP30);
   lora.SetMode(MODE_NORMAL);

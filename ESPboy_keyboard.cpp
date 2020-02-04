@@ -45,6 +45,11 @@ uint8_t keyboardModule::begin(){
 }
 
 
+uint8_t keyboardModule::getKeyboardAvailable(){
+  return(initFlag);
+}
+
+
 void keyboardModule::scanKeyboard(){
   static uint8_t keysReaded[7];
   static uint8_t row, col;
@@ -64,6 +69,7 @@ void keyboardModule::scanKeyboard(){
 
 
 wchar_t keyboardModule::getPressedKey (){
+ if(initFlag){
    pressedKey = 0;
    scanKeyboard();
    if (backlitOffDelay && !autoBacklitOffFlag && millis() > backlitOnTimer + backlitOffDelay){
@@ -82,14 +88,14 @@ wchar_t keyboardModule::getPressedKey (){
       while (keysUnpressed());
       break;
     case '~':
-      while (pressedKey == '~') scanKeyboard();
+      while (pressedKey == '~') {scanKeyboard(); delay(1);}
       if (currentLayout == keybNorm )
         pressedKey = pgm_read_word_near(&keybCurrent[keybShift][rowKey][colKey]);
       if (currentLayout == keybShift)
         pressedKey = pgm_read_word_near(&keybCurrent[keybNorm][rowKey][colKey]); 
       break;
     case '^':
-      while (pressedKey == '^') scanKeyboard();
+      while (pressedKey == '^') {scanKeyboard(); delay(1);}
       pressedKey = pgm_read_word_near(&keybCurrent[keybAlt][rowKey][colKey]);
       break;
     case '`':
@@ -106,10 +112,13 @@ wchar_t keyboardModule::getPressedKey (){
    if (pressedKey == '|' || pressedKey == '~' || pressedKey == '^' || pressedKey == '&' || pressedKey == '`') 
      pressedKey = 0;
    return pressedKey;
+ }
+else return (0);
 }
 
 
 uint8_t keyboardModule::keysUnpressed(){
+ if(initFlag){
   static uint8_t keysPressed;
   static uint8_t row;
     keysPressed = 0;
@@ -120,7 +129,9 @@ uint8_t keyboardModule::keysUnpressed(){
     }
     yield();
     return (keysPressed);
-}
+ }
+ }
+
 
 
 void keyboardModule::setBacklitState(uint8_t backlitState){

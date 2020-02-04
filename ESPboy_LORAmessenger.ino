@@ -4,15 +4,20 @@ ESPboy project: https://hackaday.io/project/164830-espboy-games-iot-stem-for-edu
 */
 
 
+#include "lib/User_Setup.h"  //TFT_eSPI setup file for ESPboy
+#define USER_SETUP_LOADED
+
 #include <ESP8266WiFi.h>
 #include <SoftwareSerial.h>
 #include "Adafruit_MCP23017.h"
 #include "Adafruit_MCP4725.h"
 #include "TFT_eSPI.h"
 #include "ESPboy_LED.h"
+#include "ESPboy_keyboard.h"
 #include "lib/glcdfont.c"
 #include "lib/ESPboyLogo.h"
 #include "ESPboy_EBYTE.h"
+
 
 #define LHSWAP(w)       (((w)>>8)|((w)<<8))
 #define MCP23017address 0 // actually it's 0x20 but in <Adafruit_MCP23017.h> lib there is (x|0x20) :)
@@ -31,7 +36,8 @@ ESPboy project: https://hackaday.io/project/164830-espboy-games-iot-stem-for-edu
 #define MAX_DELAY_BETWEEN_PACKETS 10000
 #define MAX_MESSAGE_STORE 100
 #define MAX_CONSOLE_STRINGS 10
-#define CURSOR_BLINKING_PERIOD 1000
+#define CURSOR_BLINKING_PERIOD 500
+#define TFT_FADEOUT_DELAY 2000
 
 #define PAD_LEFT        0x01
 #define PAD_UP          0x02
@@ -46,6 +52,7 @@ ESPboy project: https://hackaday.io/project/164830-espboy-games-iot-stem-for-edu
 Adafruit_MCP23017 mcp;
 Adafruit_MCP4725 dac;
 ESPboyLED myled;
+keyboardModule keybModule(1,1,10000);
 
 TFT_eSPI tft = TFT_eSPI();
 SoftwareSerial ESerial(LORA_RX, LORA_TX);
@@ -70,6 +77,10 @@ uint32_t cursorBlinkMillis = 0;
 uint8_t cursorTypeFlag = 0;
 char cursorType[2]={220,'_'};
 uint8_t sendFlag = 0;
+
+uint8_t lcdMaxBrightFlag;
+int16_t lcdFadeBrightness;
+uint32_t lcdFadeTimer;
 
 
 #pragma pack(push, 1)
@@ -192,17 +203,18 @@ void drawBlinkingCursor(){
 
 void keybOnscreen(){
    if (checkKey()){
+      lcdMaxBrightFlag++;
       if ((keyState&PAD_RIGHT) && selX < 19) { selX++; redrawSelected (selX, selY); }
       if ((keyState&PAD_LEFT) && selX > 0) { selX--; redrawSelected (selX, selY); }
       if ((keyState&PAD_DOWN) && selY < 2) { selY++; redrawSelected (selX, selY); }
       if ((keyState&PAD_UP) && selY > 0) { selY--; redrawSelected (selX, selY); }
       
-      if ((((keyState&PAD_ACT) && (selX == 19 && selY == 2)) || (keyState&PAD_ACT && keyState&PAD_ESC) || (keyState&PAD_RGT)) && typing.length()>0){
+      if ((((keyState&PAD_ACT) && (selX == 19 && selY == 2)) || (keyState&PAD_ACT && keyState&PAD_ESC) || (keyState&PAD_RGT)) && typing.length()>0){//enter
         sendFlag = 1;
         tft.fillRect(1, 128-5*8, 126, 8, TFT_BLACK);  
         printFast(4, 128-5*8, "Sending...", TFT_RED, TFT_BLACK); 
         delay(100);
-        } //enter
+        } 
       else
         if (((keyState&PAD_ACT) && (selX == 18 && selY == 2) || (keyState&PAD_ESC)) && typing.length()>0){//back space
             typing.remove(typing.length()-1); 
@@ -217,11 +229,40 @@ void keybOnscreen(){
           } 
           else
             if (keyState&PAD_ACT && typing.length() < 19) {
-            typing += (char)pgm_read_byte(&keybOnscr[selY][selX]); drawTyping();
+            typing += (char)pgm_read_byte(&keybOnscr[selY][selX]); 
+            drawTyping();
             delay(200);
             }
    }
   drawBlinkingCursor();
+  checkKeyboard();
+}
+
+
+void checkKeyboard(){
+  char keypressed;
+  if (keybModule.getPressedKey()){
+    lcdMaxBrightFlag++;
+    keypressed = (char)keybModule.getLastPressedKey();
+    if (keypressed == '<' && typing.length()>0){//back space
+      typing.remove(typing.length()-1); 
+      drawTyping();
+      delay(200);
+    } 
+    else
+      if (keypressed == '>' && typing.length() > 0){//enter
+        sendFlag = 1;
+        tft.fillRect(1, 128-5*8, 126, 8, TFT_BLACK);  
+        printFast(4, 128-5*8, "Sending...", TFT_RED, TFT_BLACK); 
+        delay(100);
+      } 
+      else
+        if(typing.length() < 19){
+          typing += keypressed; 
+          drawTyping();
+          delay(200);
+        }  
+  }
 }
 
 
@@ -279,12 +320,17 @@ void setup() {
     delay(10);}
   dac.setVoltage(4095, true);
 
+//keyboard module init
+keybModule.begin();
+
  //reset random generator
  pinMode(A0,INPUT); 
  delay(random(map(digitalRead(A0),0,1024,0,10))*1000+1000); 
 
- //clear screen
+ //clear screen and reset LCDfadeTimer
  tft.fillScreen(TFT_BLACK);
+ lcdFadeBrightness = 4095;
+ lcdFadeTimer = millis();
  delay(200);
  
  //draw interface
@@ -301,6 +347,7 @@ void setup() {
   
   if (lora.init()) drawConsole("OK", TFT_WHITE);
   else drawConsole("FAULT", TFT_RED);
+  drawConsole(" ", TFT_WHITE);
   
 //  lora.ReadParameters();
 //  printLORAparameters();
@@ -328,6 +375,7 @@ void sendPacket(){
   static uint8_t *hsh;
   static uint32_t hash;
 
+    lcdMaxBrightFlag++;
     tone(SOUNDPIN,200, 100);
     
     mess[messNo].messID = ESP.getChipId();
@@ -342,7 +390,7 @@ void sendPacket(){
 
     lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
 
-    drawConsole((String)messNo + ":" + mess[messNo].messText, TFT_YELLOW);
+    drawConsole(mess[messNo].messText, TFT_YELLOW);
     
     sendFlag = 0;
     typing = "";  
@@ -368,8 +416,11 @@ void recievePacket(){
       hash += hsh[i];
       
     if(hash == mess[messNo].hash){
+      
       tone(SOUNDPIN, 500, 200);
-      drawConsole((String)messNo + ":" + mess[messNo].messText, TFT_MAGENTA);
+      lcdMaxBrightFlag++;
+      
+      drawConsole(mess[messNo].messText, TFT_MAGENTA);
       
       messNo++;
       if (messNo > MAX_MESSAGE_STORE-1) messNo = 0;
@@ -389,11 +440,26 @@ void loop() {
   
   if (sendFlag) sendPacket();
 
-  if (millis() > availableDelay+500){
+  if (millis() > availableDelay+700){
     availableDelay = millis();
+    if (!lcdFadeBrightness && !myled.getRGB()) myled.setRGB(0,0,2);
     if (lora.available()) recievePacket();
   }
+
+  if (lcdMaxBrightFlag){
+    lcdFadeTimer = millis();
+    lcdMaxBrightFlag = 0;
+    lcdFadeBrightness = 4095;
+    dac.setVoltage(lcdFadeBrightness, false);
+  }
+
+  if ((millis() > (lcdFadeTimer + TFT_FADEOUT_DELAY)) && (lcdFadeBrightness > 0)){
+      lcdFadeBrightness -= 100;
+      if (lcdFadeBrightness < 0) lcdFadeBrightness = 0;
+      dac.setVoltage(lcdFadeBrightness, false);
+    }
+    
+  keybOnscreen();
   delay(150);
   if (myled.getRGB()) myled.setRGB(0,0,0);
-  keybOnscreen();
 }

@@ -32,12 +32,13 @@ ESPboy project: https://hackaday.io/project/164830-espboy-games-iot-stem-for-edu
 #define LORA_RX      D6
 #define LORA_TX      D8
 
-#define MIN_DELAY_BETWEEN_PACKETS 5000
-#define MAX_DELAY_BETWEEN_PACKETS 10000
 #define MAX_MESSAGE_STORE 100
 #define MAX_CONSOLE_STRINGS 10
 #define CURSOR_BLINKING_PERIOD 500
-#define TFT_FADEOUT_DELAY 2000
+#define TFT_FADEOUT_DELAY 10000
+#define ACK_MAX_SEND_ATTEMPTS 5
+#define DELAY_ACK 500
+#define ACK_TIMEOUT 2000
 
 #define PAD_LEFT        0x01
 #define PAD_UP          0x02
@@ -88,8 +89,7 @@ struct message{
   char messText[24];
   uint32_t messID; //ESP.getChipId();
   uint32_t messTimestamp; //pinMode(A0,INPUT); delay(random(digitalread(A0))); =millis();
-  uint8_t messType;
-  uint32_t hash;
+  uint32_t hash; //should be last in struct
 };
 #pragma pack(pop)
 
@@ -211,27 +211,21 @@ void keybOnscreen(){
       
       if ((((keyState&PAD_ACT) && (selX == 19 && selY == 2)) || (keyState&PAD_ACT && keyState&PAD_ESC) || (keyState&PAD_RGT)) && typing.length()>0){//enter
         sendFlag = 1;
-        tft.fillRect(1, 128-5*8, 126, 8, TFT_BLACK);  
-        printFast(4, 128-5*8, "Sending...", TFT_RED, TFT_BLACK); 
-        delay(100);
         } 
       else
         if (((keyState&PAD_ACT) && (selX == 18 && selY == 2) || (keyState&PAD_ESC)) && typing.length()>0){//back space
             typing.remove(typing.length()-1); 
             drawTyping();
-            delay(200);
         } 
         else
           if ((keyState&PAD_ACT) && (selX == 16 && selY == 1) && typing.length() < 19){//SPACE
             typing += " "; 
             drawTyping();
-            delay(200);
           } 
           else
             if (keyState&PAD_ACT && typing.length() < 19) {
             typing += (char)pgm_read_byte(&keybOnscr[selY][selX]); 
             drawTyping();
-            delay(200);
             }
    }
   drawBlinkingCursor();
@@ -247,20 +241,17 @@ void checkKeyboard(){
     if (keypressed == '<' && typing.length()>0){//back space
       typing.remove(typing.length()-1); 
       drawTyping();
-      delay(200);
     } 
     else
       if (keypressed == '>' && typing.length() > 0){//enter
         sendFlag = 1;
         tft.fillRect(1, 128-5*8, 126, 8, TFT_BLACK);  
         printFast(4, 128-5*8, "Sending...", TFT_RED, TFT_BLACK); 
-        delay(100);
       } 
       else
-        if(typing.length() < 19){
+        if(typing.length() < 19){//regular char
           typing += keypressed; 
           drawTyping();
-          delay(200);
         }  
   }
 }
@@ -302,8 +293,8 @@ void setup() {
 //TFT init
   mcp.pinMode(CSTFTPIN, OUTPUT);
   mcp.digitalWrite(CSTFTPIN, LOW);
-  delay(200);
   tft.begin();
+  delay(200);
   tft.setRotation(0);
   tft.fillScreen(TFT_BLACK);
 
@@ -321,7 +312,7 @@ void setup() {
   dac.setVoltage(4095, true);
 
 //keyboard module init
-keybModule.begin();
+ keybModule.begin();
 
  //reset random generator
  pinMode(A0,INPUT); 
@@ -372,28 +363,54 @@ keybModule.begin();
 
 
 void sendPacket(){
-  static uint8_t *hsh;
-  static uint32_t hash;
+  uint8_t *hsh;
+  uint32_t hash;
+  uint8_t gotACKflag;
+  uint32_t waitACKtimeout;
+  static message messACK;
 
     lcdMaxBrightFlag++;
     tone(SOUNDPIN,200, 100);
-    
+
     mess[messNo].messID = ESP.getChipId();
     mess[messNo].messTimestamp = millis();
-    mess[messNo].messType = messNo;
     strcpy (mess[messNo].messText, typing.c_str());
+    
+    sendFlag = 0;
+    
+    mess[messNo].hash = 0;
+    hsh = (uint8_t *)&mess[messNo];
+    for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++) mess[messNo].hash += hsh[i];
+
+    drawConsole(mess[messNo].messText, TFT_YELLOW);
 
     mess[messNo].hash = 0;
     hsh = (uint8_t *)&mess[messNo];
-    for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++) 
-      mess[messNo].hash += hsh[i];
+    for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++) mess[messNo].hash += hsh[i];
 
-    lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
+    gotACKflag = 0;
 
-    drawConsole(mess[messNo].messText, TFT_YELLOW);
-    
-    sendFlag = 0;
-    typing = "";  
+    tft.fillRect(1, 128-5*8, 126, 8, TFT_BLACK);  
+    printFast(4, 128-5*8, "Sending...", TFT_RED, TFT_BLACK); 
+      
+    for (uint8_t i = 0; i < ACK_MAX_SEND_ATTEMPTS; i++){  
+      lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
+      
+      waitACKtimeout = millis() + ACK_TIMEOUT;
+      while (!lora.available() && waitACKtimeout > millis()) delay(300);
+      if (lora.available()) {
+        lora.GetStruct(&messACK, sizeof(messACK));
+        if (mess[messNo].hash == messACK.hash) gotACKflag = 1;
+      }
+      if (gotACKflag) break;
+    }
+    if (!gotACKflag) drawConsole("not delivered", TFT_RED);
+    else{
+      typing = "";  
+      tft.fillRect(1, 128-5*8, 126, 8, TFT_BLACK);  
+      printFast(4, 128-5*8, "Sending OK", TFT_GREEN, TFT_BLACK); 
+      delay(500);
+    }
     messNo++;
     if (messNo > MAX_MESSAGE_STORE-1) messNo = 0;
     packetNo++;
@@ -412,15 +429,18 @@ void recievePacket(){
     
     hash = 0;
     hsh = (uint8_t *)&mess[messNo];
-    for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++) 
-      hash += hsh[i];
+    for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++)  hash += hsh[i];
       
-    if(hash == mess[messNo].hash){
+    if(hash == mess[messNo].hash && mess[messNo-1].hash != mess[messNo].hash){
       
       tone(SOUNDPIN, 500, 200);
       lcdMaxBrightFlag++;
       
       drawConsole(mess[messNo].messText, TFT_MAGENTA);
+
+      //sendACK
+      delay(DELAY_ACK);
+      lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
       
       messNo++;
       if (messNo > MAX_MESSAGE_STORE-1) messNo = 0;
@@ -460,6 +480,6 @@ void loop() {
     }
     
   keybOnscreen();
-  delay(150);
+  delay(100);
   if (myled.getRGB()) myled.setRGB(0,0,0);
 }

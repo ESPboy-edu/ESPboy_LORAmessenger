@@ -1,4 +1,4 @@
-/*
+ /*
 LORA messenger for ESPboy LORA messenger module, by RomanS
 ESPboy project: https://hackaday.io/project/164830-espboy-games-iot-stem-for-education-fun
 */
@@ -382,8 +382,6 @@ void sendPacket(){
     hsh = (uint8_t *)&mess[messNo];
     for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++) mess[messNo].hash += hsh[i];
 
-    drawConsole(mess[messNo].messText, TFT_YELLOW);
-
     mess[messNo].hash = 0;
     hsh = (uint8_t *)&mess[messNo];
     for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++) mess[messNo].hash += hsh[i];
@@ -395,6 +393,7 @@ void sendPacket(){
       
     for (uint8_t i = 0; i < ACK_MAX_SEND_ATTEMPTS; i++){  
       lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
+      myled.setRGB(0,0,10);
       
       waitACKtimeout = millis() + ACK_TIMEOUT;
       while (!lora.available() && waitACKtimeout > millis()) delay(300);
@@ -404,11 +403,16 @@ void sendPacket(){
       }
       if (gotACKflag) break;
     }
-    if (!gotACKflag) drawConsole("not delivered", TFT_RED);
+    if (!gotACKflag) {
+      drawConsole(mess[messNo].messText, TFT_DARKGREY);
+      myled.setRGB(10,0,0);
+    }
     else{
       typing = "";  
       tft.fillRect(1, 128-5*8, 126, 8, TFT_BLACK);  
+      drawConsole(mess[messNo].messText, TFT_YELLOW);
       printFast(4, 128-5*8, "Sending OK", TFT_GREEN, TFT_BLACK); 
+      myled.setRGB(0,10,0);
       delay(500);
     }
     messNo++;
@@ -430,20 +434,27 @@ void recievePacket(){
     hash = 0;
     hsh = (uint8_t *)&mess[messNo];
     for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++)  hash += hsh[i];
-      
-    if(hash == mess[messNo].hash && mess[messNo-1].hash != mess[messNo].hash){
-      
-      tone(SOUNDPIN, 500, 200);
-      lcdMaxBrightFlag++;
-      
-      drawConsole(mess[messNo].messText, TFT_MAGENTA);
 
-      //sendACK
+
+    if(hash == mess[messNo].hash){ 
       delay(DELAY_ACK);
-      lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
       
-      messNo++;
-      if (messNo > MAX_MESSAGE_STORE-1) messNo = 0;
+      if(mess[messNo-1].hash != mess[messNo].hash){
+
+        //sendACK
+        lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
+
+        tone(SOUNDPIN, 500, 200);
+        lcdMaxBrightFlag++;
+      
+        drawConsole(mess[messNo].messText, TFT_MAGENTA);
+      
+        messNo++;
+        if (messNo > MAX_MESSAGE_STORE-1) messNo = 0;
+      }
+      if(mess[messNo-1].hash == mess[messNo].hash){
+        lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
+      }
     }
   else 
     myled.setRGB(10,0,0);
@@ -480,6 +491,6 @@ void loop() {
     }
     
   keybOnscreen();
-  delay(100);
+  delay(150);
   if (myled.getRGB()) myled.setRGB(0,0,0);
 }

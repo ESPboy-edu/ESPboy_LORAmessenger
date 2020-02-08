@@ -89,6 +89,7 @@ struct message{
   char messText[24];
   uint32_t messID; //ESP.getChipId();
   uint32_t messTimestamp; //pinMode(A0,INPUT); delay(random(digitalread(A0))); =millis();
+  uint32_t messType; //0-mess / 1-ACK
   uint32_t hash; //should be last in struct
 };
 #pragma pack(pop)
@@ -362,9 +363,18 @@ void setup() {
 }
 
 
-void sendPacket(){
+uint32_t calcHash(message mess){
   uint8_t *hsh;
   uint32_t hash;
+  hash = 0;
+  hsh = (uint8_t *)&mess;
+  for (uint16_t i=0; i<sizeof(mess)-sizeof(mess.hash) - sizeof(mess.messType); i++) hash += hsh[i];
+  return (hash);
+}
+
+
+
+void sendPacket(){
   uint8_t gotACKflag;
   uint32_t waitACKtimeout;
   static message messACK;
@@ -374,20 +384,13 @@ void sendPacket(){
 
     mess[messNo].messID = ESP.getChipId();
     mess[messNo].messTimestamp = millis();
+    mess[messNo].messType = 0;
     strcpy (mess[messNo].messText, typing.c_str());
     
     sendFlag = 0;
-    
-    mess[messNo].hash = 0;
-    hsh = (uint8_t *)&mess[messNo];
-    for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++) mess[messNo].hash += hsh[i];
-
-    mess[messNo].hash = 0;
-    hsh = (uint8_t *)&mess[messNo];
-    for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++) mess[messNo].hash += hsh[i];
+    mess[messNo].hash = calcHash(mess[messNo]);
 
     gotACKflag = 0;
-
     tft.fillRect(1, 128-5*8, 126, 8, TFT_BLACK);  
     printFast(4, 128-5*8, "Sending...", TFT_RED, TFT_BLACK); 
       
@@ -422,7 +425,6 @@ void sendPacket(){
 
 
 void recievePacket(){
-  static uint8_t *hsh;
   static uint32_t hash;
 
     myled.setRGB(0,10,0);
@@ -430,11 +432,8 @@ void recievePacket(){
     mess[messNo].hash = 65535;
     
     lora.GetStruct(&mess[messNo], sizeof(mess[messNo]));
-    
-    hash = 0;
-    hsh = (uint8_t *)&mess[messNo];
-    for (uint8_t i=0; i<sizeof(mess[messNo])-sizeof(mess[messNo].hash); i++)  hash += hsh[i];
 
+    hash = calcHash (mess[messNo]);
 
     if(hash == mess[messNo].hash){ 
       delay(DELAY_ACK);
@@ -442,6 +441,7 @@ void recievePacket(){
       if(mess[messNo-1].hash != mess[messNo].hash){
 
         //sendACK
+        mess[messNo].messType = 1;
         lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
 
         tone(SOUNDPIN, 500, 200);
@@ -452,7 +452,8 @@ void recievePacket(){
         messNo++;
         if (messNo > MAX_MESSAGE_STORE-1) messNo = 0;
       }
-      if(mess[messNo-1].hash == mess[messNo].hash){
+      if(mess[messNo-1].hash == mess[messNo].hash && mess[messNo].messType != 1){
+        mess[messNo].messType = 1;
         lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
       }
     }

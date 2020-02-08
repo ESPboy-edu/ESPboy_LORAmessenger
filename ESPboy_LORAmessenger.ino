@@ -402,6 +402,11 @@ void sendPacket(){
       while (!lora.available() && waitACKtimeout > millis()) delay(300);
       if (lora.available()) {
         lora.GetStruct(&messACK, sizeof(messACK));
+        
+        //elliminate echo
+        delay(200);
+        lora.Clear();
+        
         if (mess[messNo].hash == messACK.hash) gotACKflag = 1;
       }
       if (gotACKflag) break;
@@ -433,6 +438,11 @@ void recievePacket(){
     
     lora.GetStruct(&mess[messNo], sizeof(mess[messNo]));
 
+
+    //elliminate echo
+    delay(200);
+    lora.Clear();
+
     hash = calcHash (mess[messNo]);
 
     if(hash == mess[messNo].hash){ 
@@ -459,10 +469,6 @@ void recievePacket(){
     }
   else 
     myled.setRGB(10,0,0);
-
-//elliminate echo
-  delay(100);
-  lora.Clear();
 }
 
 

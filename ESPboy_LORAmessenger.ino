@@ -363,12 +363,13 @@ void setup() {
 }
 
 
-uint32_t calcHash(message mess){
+uint32_t calcCRC(message mess){
   uint8_t *hsh;
   uint32_t hash;
   hash = 0;
   hsh = (uint8_t *)&mess;
-  for (uint16_t i=0; i<sizeof(mess)-sizeof(mess.hash) - sizeof(mess.messType); i++) hash += hsh[i];
+  for (uint16_t i=0; i<sizeof(mess)-sizeof(mess.hash) - sizeof(mess.messType); i++)
+    hash += hsh[i]*(i+211);
   return (hash);
 }
 
@@ -388,7 +389,7 @@ void sendPacket(){
     strcpy (mess[messNo].messText, typing.c_str());
     
     sendFlag = 0;
-    mess[messNo].hash = calcHash(mess[messNo]);
+    mess[messNo].hash = calcCRC(mess[messNo]);
 
     gotACKflag = 0;
     tft.fillRect(1, 128-5*8, 126, 8, TFT_BLACK);  
@@ -443,7 +444,7 @@ void recievePacket(){
     delay(200);
     lora.Clear();
 
-    hash = calcHash (mess[messNo]);
+    hash = calcCRC (mess[messNo]);
 
     if(hash == mess[messNo].hash){ 
       delay(DELAY_ACK);

@@ -3,9 +3,32 @@ LORA messenger for ESPboy LORA messenger module, by RomanS
 ESPboy project: https://hackaday.io/project/164830-espboy-games-iot-stem-for-education-fun
 */
 
-
 #include "lib/User_Setup.h"  //TFT_eSPI setup file for ESPboy
 #define USER_SETUP_LOADED
+
+
+struct message{
+  char messText[24];
+  uint32_t messID; //ESP.getChipId();
+  uint32_t messTimestamp; //pinMode(A0,INPUT); delay(random(digitalread(A0))); =millis();
+  uint32_t messType; //0-mess / 1-ACK
+  uint32_t hash; //should be last in struct
+};
+
+/*
+//crypto vars --------------------
+#include <Crypto.h>
+#include <base64.hpp>
+#define BLOCK_SIZE 16
+#define AES_BUF_LENGTH ((sizeof(message)/BLOCK_SIZE)+1)*BLOCK_SIZE
+
+uint8_t key[BLOCK_SIZE] = { 0x1C,0x3E,0x4B,0xAF,0x13,0x4A,0x89,0xC3,0xF3,0x87,0x4F,0xBC,0xD7,0xF3, 0x31, 0x31 };
+uint8_t iv[BLOCK_SIZE] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+uint8_t decrypted[AES_BUF_LENGTH];
+uint8_t encrypted[AES_BUF_LENGTH];
+//---------------------------------
+*/
+
 
 #include <ESP8266WiFi.h>
 #include <SoftwareSerial.h>
@@ -82,17 +105,6 @@ uint8_t sendFlag = 0;
 uint8_t lcdMaxBrightFlag;
 int16_t lcdFadeBrightness;
 uint32_t lcdFadeTimer;
-
-
-#pragma pack(push, 1)
-struct message{
-  char messText[24];
-  uint32_t messID; //ESP.getChipId();
-  uint32_t messTimestamp; //pinMode(A0,INPUT); delay(random(digitalread(A0))); =millis();
-  uint32_t messType; //0-mess / 1-ACK
-  uint32_t hash; //should be last in struct
-};
-#pragma pack(pop)
 
 
 static message mess[MAX_MESSAGE_STORE];
@@ -373,12 +385,34 @@ uint32_t calcCRC(message mess){
   return (hash);
 }
 
+/*
+void encrypt(uint8_t* source, uint8_t* output, uint16_t blockLength){
+  uint8_t enciphered[blockLength];
+  uint8_t encoded[blockLength];
+  //RNG::fill(iv, BLOCK_SIZE); 
+  AES aesEncryptor(key, iv, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
+  aesEncryptor.process(source, enciphered, blockLength);
+  encode_base64(enciphered, blockLength, encoded);
+  memcpy(output, encoded, blockLength);
+}
+
+
+void decrypt(uint8_t* enciphered, uint8_t* output, uint16_t blockLength){
+  blockLength ++; //re-adjust
+  uint8_t decoded[blockLength];
+  uint8_t  deciphered[blockLength];
+  decode_base64(enciphered, decoded);
+  AES aesDecryptor(key, iv, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
+  aesDecryptor.process(decoded, deciphered, blockLength);
+  memcpy(output, deciphered, sizeof(message));
+}
+*/
 
 
 void sendPacket(){
   uint8_t gotACKflag;
   uint32_t waitACKtimeout;
-  static message messACK;
+  message messACK;
 
     lcdMaxBrightFlag++;
     tone(SOUNDPIN,200, 100);
@@ -396,13 +430,18 @@ void sendPacket(){
     printFast(4, 128-5*8, "Sending...", TFT_RED, TFT_BLACK); 
       
     for (uint8_t i = 0; i < ACK_MAX_SEND_ATTEMPTS; i++){  
-      lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
+    lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));  
+/*AES*///encrypt((uint8_t*)&mess[messNo], encrypted, AES_BUF_LENGTH);
+/*AES*///lora.SendStruct(&encrypted, AES_BUF_LENGTH);
       myled.setRGB(0,0,10);
       
       waitACKtimeout = millis() + ACK_TIMEOUT;
       while (!lora.available() && waitACKtimeout > millis()) delay(300);
       if (lora.available()) {
-        lora.GetStruct(&messACK, sizeof(messACK));
+      lora.GetStruct(&messACK, sizeof(messACK));
+/*AES*///lora.GetStruct(&encrypted, AES_BUF_LENGTH);     
+/*AES*///decrypt(encrypted, decrypted, AES_BUF_LENGTH);
+/*AES*///memcpy(&messACK, &decrypted, sizeof(message));
         
         //elliminate echo
         delay(200);
@@ -432,20 +471,22 @@ void sendPacket(){
 
 void recievePacket(){
   static uint32_t hash;
-
+  
     myled.setRGB(0,10,0);
     memset(&mess[messNo], sizeof(mess[messNo]),0);
     mess[messNo].hash = 65535;
     
     lora.GetStruct(&mess[messNo], sizeof(mess[messNo]));
-
+/*AES*///lora.GetStruct(&encrypted, AES_BUF_LENGTH);      
+/*AES*///decrypt(encrypted, decrypted, AES_BUF_LENGTH);
+/*AES*///memcpy(&mess[messNo], &decrypted, sizeof(message));
 
     //elliminate echo
     delay(200);
     lora.Clear();
 
     hash = calcCRC (mess[messNo]);
-
+    
     if(hash == mess[messNo].hash){ 
       delay(DELAY_ACK);
       
@@ -454,6 +495,8 @@ void recievePacket(){
         //sendACK
         mess[messNo].messType = 1;
         lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
+/*AES*///encrypt((uint8_t*)&mess[messNo], encrypted, AES_BUF_LENGTH);
+/*AES*///lora.SendStruct(&encrypted, AES_BUF_LENGTH);
 
         tone(SOUNDPIN, 500, 200);
         lcdMaxBrightFlag++;
@@ -466,6 +509,8 @@ void recievePacket(){
       if(mess[messNo-1].hash == mess[messNo].hash && mess[messNo].messType != 1){
         mess[messNo].messType = 1;
         lora.SendStruct(&mess[messNo], sizeof(mess[messNo]));
+/*AES*///encrypt((uint8_t*)&mess[messNo], encrypted, AES_BUF_LENGTH);
+/*AES*///lora.SendStruct(&encrypted, AES_BUF_LENGTH);       
       }
     }
   else 

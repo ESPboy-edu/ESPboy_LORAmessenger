@@ -40,7 +40,7 @@ uint8_t encrypted[AES_BUF_LENGTH];
 #include "lib/glcdfont.c"
 #include "lib/ESPboyLogo.h"
 #include "ESPboy_EBYTE.h"
-
+#include "ESPboyOTA.h"
 
 #define LHSWAP(w)       (((w)>>8)|((w)<<8))
 #define MCP23017address 0 // actually it's 0x20 but in <Adafruit_MCP23017.h> lib there is (x|0x20) :)
@@ -81,7 +81,7 @@ keyboardModule keybModule(1,1,10000);
 TFT_eSPI tft = TFT_eSPI();
 SoftwareSerial ESerial(LORA_RX, LORA_TX);
 EBYTE lora (&ESerial, &mcp, LORA_M0, LORA_M1, LORA_AUX, 1000);
-
+ESPboyOTA* OTAobj = NULL;
 
 constexpr uint8_t keybOnscr[3][21] PROGMEM = {
 "1234567890ABCDEFGHIJ",
@@ -93,8 +93,8 @@ constexpr uint8_t keybOnscr[3][21] PROGMEM = {
 static String consolestrings[MAX_CONSOLE_STRINGS+1];
 static uint16_t consolestringscolor[MAX_CONSOLE_STRINGS+1];
 uint16_t line_buffer[46];
-uint16_t packetNo = 0;
 uint8_t keyState = 0, selX = 0, selY = 0;
+uint16_t packetNo = 0;
 
 String typing = "";
 uint32_t cursorBlinkMillis = 0;
@@ -109,6 +109,8 @@ uint32_t lcdFadeTimer;
 
 static message mess[MAX_MESSAGE_STORE];
 static uint16_t messNo = 1;
+
+uint8_t getKeys() { return (~mcp.readGPIOAB() & 255); }
 
 void drawConsole(String bfrstr, uint16_t color){
   for (int i=0; i<MAX_CONSOLE_STRINGS; i++) {
@@ -270,111 +272,6 @@ void checkKeyboard(){
 }
 
 
-void setup() {
-  Serial.begin(9600);
-  ESerial.begin(9600);
-  
-  WiFi.mode(WIFI_OFF);
-  delay(100);
-
-//LED init
-  myled.begin();
-
-//DAC init, LCD backlit off
-  dac.begin(MCP4725address);
-  delay(50);
-  dac.setVoltage(0, false);
-  delay(100);
-
-//MCP23017 and buttons init, should preceed the TFT init
-  mcp.begin(MCP23017address);
-  delay(100);
-
-  for (int i = 0; i < 8; ++i){
-    mcp.pinMode(i, INPUT);
-    mcp.pullUp(i, HIGH);
-  }
-
-//Sound init and test
-  pinMode(SOUNDPIN, OUTPUT);
-  tone(SOUNDPIN, 200, 100);
-  delay(100);
-  tone(SOUNDPIN, 100, 100);
-  delay(100);
-  noTone(SOUNDPIN);
-
-//TFT init
-  mcp.pinMode(CSTFTPIN, OUTPUT);
-  mcp.digitalWrite(CSTFTPIN, LOW);
-  tft.begin();
-  delay(200);
-  tft.setRotation(0);
-  tft.fillScreen(TFT_BLACK);
-
-//draw ESPboylogo
-  tft.drawXBitmap(30, 20, ESPboyLogo, 68, 64, TFT_YELLOW);
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_YELLOW);
-  tft.setCursor(22, 95);
-  tft.print(F("LORA messenger"));
-
-//LCD backlit on
-  for (uint8_t bcklt=0; bcklt<100; bcklt++){
-    dac.setVoltage(bcklt*20, false);
-    delay(10);}
-  dac.setVoltage(4095, true);
-
-//keyboard module init
- keybModule.begin();
-
- //reset random generator
- pinMode(A0,INPUT); 
- delay(random(map(digitalRead(A0),0,1024,0,10))*1000+1000); 
-
- //clear screen and reset LCDfadeTimer
- tft.fillScreen(TFT_BLACK);
- lcdFadeBrightness = 4095;
- lcdFadeTimer = millis();
- delay(200);
- 
- //draw interface
- drawConsole(F("Init LORA..."), TFT_WHITE);
- tft.fillRect(0, 128-24, 128, 24, TFT_BLACK);
- redrawOnscreen(selX, selY);
- drawTyping();
- tft.drawRect(0, 128-3*8-5, 128, 3*8+5, TFT_NAVY);
- tft.drawRect(0, 0, 128, MAX_CONSOLE_STRINGS*8+4, TFT_NAVY);
- tft.drawRect(0, 0, 128, 128, TFT_NAVY);
-
-//init LORA and restoring config
-  ESerial.begin(9600);
-  
-  if (lora.init()) drawConsole("OK", TFT_WHITE);
-  else drawConsole("FAULT", TFT_RED);
-  drawConsole(" ", TFT_WHITE);
-  
-//  lora.ReadParameters();
-//  printLORAparameters();
-  
-  lora.SetAirDataRate(ADR_2400);   // change the air data rate
-  lora.SetAddressH(2);   // set the high address byte
-  lora.SetAddressL(2);   // set the low address byte
-  lora.SetChannel(7);     // set the channel (0-32 is pretty typical)
-  lora.SetUARTBaudRate(UDR_9600);
-  lora.SetTransmitPower(OPT_TP30);
-  lora.SetMode(MODE_NORMAL);
-  lora.SetFEC(FEC_ON);
-  lora.SetPullup(PullUp_ON);
-  lora.SetFixedMode(Transparent_Mode);
-  lora.SetParityBit(PB_8N1);
-  
-  lora.SaveParameters(PERMANENT);  // save the parameters to the EBYTE EEPROM, you can save temp if periodic changes are needed
- 
-//  lora.ReadParameters();
-//  printLORAparameters();
-}
-
-
 uint32_t calcCRC(message mess){
   uint8_t *hsh;
   uint32_t hash;
@@ -516,6 +413,117 @@ void recievePacket(){
   else 
     myled.setRGB(10,0,0);
 }
+
+
+
+
+void setup() {
+  Serial.begin(9600);
+  ESerial.begin(9600);
+  
+  WiFi.mode(WIFI_OFF);
+  delay(100);
+
+//LED init
+  myled.begin();
+
+//DAC init, LCD backlit off
+  dac.begin(MCP4725address);
+  delay(50);
+  dac.setVoltage(0, false);
+  delay(100);
+
+//MCP23017 and buttons init, should preceed the TFT init
+  mcp.begin(MCP23017address);
+  delay(100);
+
+  for (int i = 0; i < 8; ++i){
+    mcp.pinMode(i, INPUT);
+    mcp.pullUp(i, HIGH);
+  }
+
+//Sound init and test
+  pinMode(SOUNDPIN, OUTPUT);
+  tone(SOUNDPIN, 200, 100);
+  delay(100);
+  tone(SOUNDPIN, 100, 100);
+  delay(100);
+  noTone(SOUNDPIN);
+
+//TFT init
+  mcp.pinMode(CSTFTPIN, OUTPUT);
+  mcp.digitalWrite(CSTFTPIN, LOW);
+  tft.begin();
+  delay(200);
+  tft.setRotation(0);
+  tft.fillScreen(TFT_BLACK);
+
+//draw ESPboylogo
+  tft.drawXBitmap(30, 20, ESPboyLogo, 68, 64, TFT_YELLOW);
+  tft.setTextSize(1);
+  tft.setTextColor(TFT_YELLOW);
+  tft.setCursor(22, 95);
+  tft.print(F("LORA messenger"));
+
+//LCD backlit on
+  for (uint8_t bcklt=0; bcklt<100; bcklt++){
+    dac.setVoltage(bcklt*20, false);
+    delay(10);}
+  dac.setVoltage(4095, true);
+
+//keyboard module init
+ keybModule.begin();
+
+ //reset random generator
+ pinMode(A0,INPUT); 
+ delay(random(map(digitalRead(A0),0,1024,0,10))*1000+1000); 
+
+ //clear screen and reset LCDfadeTimer
+ tft.fillScreen(TFT_BLACK);
+ lcdFadeBrightness = 4095;
+ lcdFadeTimer = millis();
+ delay(200);
+
+//OTA check
+ if (getKeys()&PAD_ACT || getKeys()&PAD_ESC) OTAobj = new ESPboyOTA(&tft, &mcp);
+ 
+ //draw interface
+ drawConsole(F("Init LORA..."), TFT_WHITE);
+ tft.fillRect(0, 128-24, 128, 24, TFT_BLACK);
+ redrawOnscreen(selX, selY);
+ drawTyping();
+ tft.drawRect(0, 128-3*8-5, 128, 3*8+5, TFT_NAVY);
+ tft.drawRect(0, 0, 128, MAX_CONSOLE_STRINGS*8+4, TFT_NAVY);
+ tft.drawRect(0, 0, 128, 128, TFT_NAVY);
+
+//init LORA and restoring config
+  ESerial.begin(9600);
+  
+  if (lora.init()) drawConsole("OK", TFT_WHITE);
+  else drawConsole("FAULT", TFT_RED);
+  drawConsole(" ", TFT_WHITE);
+  
+//  lora.ReadParameters();
+//  printLORAparameters();
+  
+  lora.SetAirDataRate(ADR_2400);   // change the air data rate
+  lora.SetAddressH(2);   // set the high address byte
+  lora.SetAddressL(2);   // set the low address byte
+  lora.SetChannel(7);     // set the channel (0-32 is pretty typical)
+  lora.SetUARTBaudRate(UDR_9600);
+  lora.SetTransmitPower(OPT_TP30);
+  lora.SetMode(MODE_NORMAL);
+  lora.SetFEC(FEC_ON);
+  lora.SetPullup(PullUp_ON);
+  lora.SetFixedMode(Transparent_Mode);
+  lora.SetParityBit(PB_8N1);
+  
+  lora.SaveParameters(PERMANENT);  // save the parameters to the EBYTE EEPROM, you can save temp if periodic changes are needed
+ 
+//  lora.ReadParameters();
+//  printLORAparameters();
+}
+
 
 
 

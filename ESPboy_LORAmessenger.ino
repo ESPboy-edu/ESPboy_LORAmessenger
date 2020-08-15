@@ -55,7 +55,7 @@ uint8_t encrypted[AES_BUF_LENGTH];
 #define LORA_RX      D6
 #define LORA_TX      D8
 
-#define MAX_MESSAGE_STORE 100
+#define MAX_MESSAGE_STORE 50
 #define MAX_CONSOLE_STRINGS 10
 #define CURSOR_BLINKING_PERIOD 500
 #define TFT_FADEOUT_DELAY 10000

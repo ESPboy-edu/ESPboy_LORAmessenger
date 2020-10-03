@@ -58,7 +58,7 @@ uint8_t encrypted[AES_BUF_LENGTH];
 #define MAX_MESSAGE_STORE 50
 #define MAX_CONSOLE_STRINGS 10
 #define CURSOR_BLINKING_PERIOD 500
-#define TFT_FADEOUT_DELAY 10000
+#define TFT_FADEOUT_DELAY 20000
 #define ACK_MAX_SEND_ATTEMPTS 5
 #define DELAY_ACK 500
 #define ACK_TIMEOUT 2000
@@ -106,8 +106,8 @@ uint8_t lcdMaxBrightFlag;
 int16_t lcdFadeBrightness;
 uint32_t lcdFadeTimer;
 
+message *mess;
 
-static message mess[MAX_MESSAGE_STORE];
 static uint16_t messNo = 1;
 
 uint8_t getKeys() { return (~mcp.readGPIOAB() & 255); }
@@ -277,7 +277,7 @@ uint32_t calcCRC(message mess){
   uint32_t hash;
   hash = 0;
   hsh = (uint8_t *)&mess;
-  for (uint16_t i=0; i<sizeof(mess)-sizeof(mess.hash) - sizeof(mess.messType); i++)
+  for (uint16_t i=0; i<sizeof(mess)-sizeof(mess.messType) - sizeof(mess.hash); i++)
     hash += hsh[i]*(i+211);
   return (hash);
 }
@@ -381,7 +381,7 @@ void recievePacket(){
     //elliminate echo
     delay(200);
     lora.Clear();
-
+    
     hash = calcCRC (mess[messNo]);
     
     if(hash == mess[messNo].hash){ 
@@ -486,6 +486,8 @@ void setup() {
 
 //OTA check
  if (getKeys()&PAD_ACT || getKeys()&PAD_ESC) OTAobj = new ESPboyOTA(&tft, &mcp);
+
+ mess = new message [MAX_MESSAGE_STORE];
  
  //draw interface
  drawConsole(F("Init LORA..."), TFT_WHITE);

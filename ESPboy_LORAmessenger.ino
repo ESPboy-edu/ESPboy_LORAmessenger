@@ -40,7 +40,6 @@ uint8_t encrypted[AES_BUF_LENGTH];
 #include "lib/glcdfont.c"
 #include "lib/ESPboyLogo.h"
 #include "ESPboy_EBYTE.h"
-#include "ESPboyOTA.h"
 
 #define LHSWAP(w)       (((w)>>8)|((w)<<8))
 #define MCP23017address 0 // actually it's 0x20 but in <Adafruit_MCP23017.h> lib there is (x|0x20) :)
@@ -81,7 +80,6 @@ keyboardModule keybModule(1,1,10000);
 TFT_eSPI tft = TFT_eSPI();
 SoftwareSerial ESerial(LORA_RX, LORA_TX);
 EBYTE lora (&ESerial, &mcp, LORA_M0, LORA_M1, LORA_AUX, 1000);
-ESPboyOTA* OTAobj = NULL;
 
 constexpr uint8_t keybOnscr[3][21] PROGMEM = {
 "1234567890ABCDEFGHIJ",
@@ -416,11 +414,14 @@ void recievePacket(){
 
 
 
-
 void setup() {
   Serial.begin(9600);
+  Serial.setRxBufferSize(2048);
   ESerial.begin(9600);
-  
+//TODO
+//SHOULD USE ESPSOFTWARESERIAL.H
+//AND INCREASE BUFFER SIZE TO AVOID ERRORS
+
   WiFi.mode(WIFI_OFF);
   delay(100);
 
@@ -483,9 +484,6 @@ void setup() {
  lcdFadeBrightness = 4095;
  lcdFadeTimer = millis();
  delay(200);
-
-//OTA check
- if (getKeys()&PAD_ACT || getKeys()&PAD_ESC) OTAobj = new ESPboyOTA(&tft, &mcp);
 
  mess = new message [MAX_MESSAGE_STORE];
  

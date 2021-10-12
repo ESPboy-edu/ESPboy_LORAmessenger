@@ -16,13 +16,14 @@ You can buy this module ready-made or make it yourself.
 
 ## 1. Buy EBYTE E32 LORA module
 
-![LORA](pics/e32_ebyte.jpg)
+![LORA](pics/e32_ebyte.jpeg)
 
-- [Here you can find lot of them](https://aliexpress.ru/item/32791508935.html?sku_id=63827064437&spm=a2g2w.productlist.0.0.53ee4d19KkH6VF)
-- Note:
--- Select a module with the correct frequency range allowed in your country 433/868/915 MHz (see the module data sheet for the exact frequency range)
--- Choose the module with the correct output power allowed in your country 100mW/1W (for the exact output power see the module's data sheet)
--- You can communicate between modules with the same frequency
+[Here you can find lot of them](https://aliexpress.ru/item/32791508935.html?sku_id=63827064437&spm=a2g2w.productlist.0.0.53ee4d19KkH6VF)
+
+Note:
+- Select a module with the correct frequency range allowed in your country 433/868/915 MHz (see the module data sheet for the exact frequency range)
+- Choose the module with the correct output power allowed in your country 100mW/1W (for the exact output power see the module's data sheet)
+- You can communicate between modules with the same frequency
 
 
 ## 2. Buy and connect antenna with corresponded connector for the same frequency as your module (it's important to have correct antenna)

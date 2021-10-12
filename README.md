@@ -1,27 +1,62 @@
-# ESPboy_LORAmessenger
-www.ESPboy.com
-ESPboy messenger with LORA module based on EBYTE solution. Up to 8km encrypted chat. Almost absolute privacy ) 
+# ESPboy LORA messenger
 
-This is firmware for the [LORA messenger module](https://hackaday.io/project/164830-espboy-games-iot-stem-for-education-fun/log/173526-espboy-lora-messenger-8km-encrypted-chat) of the [ESPboy project](https://hackaday.io/project/164830-espboy-games-iot-stem-for-education-fun)
-it also suppots [ESPboy keyboard module](https://hackaday.io/project/164830-espboy-games-iot-stem-for-education-fun/log/173586-improved-lora-messenger)
+[Demo video](https://www.youtube.com/watch?v=_tweZfW0TBg)
+
+ESPboy LORA messenger based on EBYTE E32 LORA modules provides up to 8km encrypted chat. 
+Almost absolute privacy ) 
+
+You can buy this module ready-made or make it yourself.
+
+![1](pics/ESPboy_LORA_1.jpg)
+
+![2](pics/ESPboy_LORA_2.jpg)
+
+![3](pics/ESPboy_LORA_3.jpg)
 
 
-Do you suffer from paranoia? Are they spying on you?
-Here is the ultimate offer! 
-LORA module based on EBYTE solution turning your ESPboy to protected messenger gadget. 
-Up to 8km and even more encrypted chat at 868mhz or 433mhz. 
+## 1. Buy EBYTE E32 LORA module
 
-Almost absolute privacy! 
-An ideal solution in case of zombie apocalypses!
-You don't need GSM or WiFi, nothing. 
-Fully self-contained communication.
+![LORA](pics/e32_ebyte.jpg)
 
-Use EBYTE E32 modules 
-https://aliexpress.ru/wholesale?catId=0&SearchText=EBYTE%20LORA
+- [Here you can find lot of them](https://aliexpress.ru/item/32791508935.html?sku_id=63827064437&spm=a2g2w.productlist.0.0.53ee4d19KkH6VF)
+- Note:
+-- Select a module with the correct frequency range allowed in your country 433/868/915 MHz (see the module data sheet for the exact frequency range)
+-- Choose the module with the correct output power allowed in your country 100mW/1W (for the exact output power see the module's data sheet)
+-- You can communicate between modules with the same frequency
 
-Connect LORA to ESPboy
-LORA_M0 to ESPBOY_MCP23017_13  
-LORA_M1 to ESPBOY_MCP23017_14 
-LORA_AUX to ESPBOY_MCP23017_15 
-LORA_RX to ESPboy_D6
-LORA_TX to ESPboy_D8
+
+## 2. Buy and connect antenna with corresponded connector for the same frequency as your module (it's important to have correct antenna)
+
+[For example here](https://www.aliexpress.com/store/group/Communication-Antenna/2798183_10000000863529.html?spm=a2g2w.detail.1000061.18.6d5a5c141aJGCI&_ga=2.178958308.1747976162.1633989151-433412991.1633989151)
+
+Running without antenna your module could be damaged!
+
+
+## 3. Do the connections
+
+- LORA M0  -> ESPBOY B5 (MCP23017 GPIO13)  
+- LORA M1  -> ESPBOY B6 (MCP23017 GPIO14) 
+- LORA AUX -> ESPBOY B7 (MCP23017 GPIO15)
+- LORA RX  -> ESPboy MO (MOSI)(D6)(GPIO12)
+- LORA TX  -> ESPboy D8 (GPIO15)
+
+
+## 3. Upload this firmware
+
+NOTE: Before compilation, set Arduino IDE settings
+
+-  Board:  ESP8266 WeMos D1 mini
+-  CPU frequency: 160Mhz
+
+## 4. Useful links
+
+- [Buy ESPboy](https://www.tindie.com/products/23910/)
+- [DIY ESPboy](https://easyeda.com/ESPboy)
+- [Main Web site](https://www.espboy.com)
+- [YouTube channel](https://www.youtube.com/c/ESPboy)
+- [Community](https://community.espboy.com)
+- [Discord chat](https://discord.gg/kXfDQpX)
+- [Twitter](https://twitter.com/ESPboy_edu)
+- [Software](https://github.com/ESPboy-edu)
+- [Contact: espboy.edu@gmail.com](mailto:espboy.edu@gmail.com)
+

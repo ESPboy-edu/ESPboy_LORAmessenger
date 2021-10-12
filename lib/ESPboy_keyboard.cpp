@@ -130,6 +130,7 @@ uint8_t keyboardModule::keysUnpressed(){
     yield();
     return (keysPressed);
  }
+ return(0);
  }
 
 

@@ -1,6 +1,6 @@
 # ESPboy LORA messenger
 
-[Demo video](https://www.youtube.com/watch?v=_tweZfW0TBg)
+[Demo video](https://www.youtube.com/watch?v=gTPbAHR1Q_A)
 
 ESPboy LORA messenger based on EBYTE E32 LORA modules provides up to 8km encrypted chat. 
 Almost absolute privacy ) 

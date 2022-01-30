@@ -35,6 +35,8 @@ Running without antenna your module could be damaged!
 
 ## 3. Do the connections
 
+- LORA VCC -> ESPBOY VCC
+- LORA GND -> ESPBOY GND
 - LORA M0  -> ESPBOY B5 (MCP23017 GPIO13)  
 - LORA M1  -> ESPBOY B6 (MCP23017 GPIO14) 
 - LORA AUX -> ESPBOY B7 (MCP23017 GPIO15)

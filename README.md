@@ -40,8 +40,8 @@ Running without antenna your module could be damaged!
 - LORA M0  -> ESPBOY B5 (MCP23017 GPIO13)  
 - LORA M1  -> ESPBOY B6 (MCP23017 GPIO14) 
 - LORA AUX -> ESPBOY B7 (MCP23017 GPIO15)
-- LORA RX  -> ESPboy MO (MOSI)(D6)(GPIO12)
-- LORA TX  -> ESPboy D8 (GPIO15)
+- LORA RX  -> ESPboy SS (Slave Select) (D8) (GPIO15)
+- LORA TX  -> ESPboy MI (MISO) (D6) (GPIO12)
 
 
 ## 3. Upload this firmware
